@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Data Cool - 3D Preview</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; }
+        #ui {
+            position: absolute; top: 20px; left: 20px; color: white;
+            background: rgba(0,0,0,0.7); padding: 20px; border-radius: 8px;
+            pointer-events: none; user-select: none;
+        }
+        .legend { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+        .dot { width: 15px; height: 15px; border-radius: 50%; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+      }
+    </script>
+</head>
+<body>
+    <div id="ui">
+        <h1 style="margin: 0 0 10px 0;">Data Cool: AI Optimizer</h1>
+        <div>Status: <span id="status">Monitoring...</span></div>
+        <div class="legend">
+            <div class="dot" style="background: #33ff57;"></div> Optimized
+            <div class="dot" style="background: #ff3333;"></div> Overloaded
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // 1. Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#111');
+        scene.fog = new THREE.Fog('#111', 10, 25);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(8, 8, 12);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 7);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // 3. Floor
+        const floorGeo = new THREE.PlaneGeometry(20, 20);
+        const floorMat = new THREE.MeshStandardMaterial({ color: '#222', roughness: 0.8, metalness: 0.2 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // 4. Create Racks
+        const rows = 6;
+        const cols = 8;
+        const racks = [];
+        const geometry = new THREE.BoxGeometry(0.8, 2, 0.8);
+        
+        for(let r=0; r<rows; r++) {
+            for(let c=0; c<cols; c++) {
+                // Material (Green initially)
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x33ff57, 
+                    emissive: 0x33ff57,
+                    emissiveIntensity: 0.1,
+                    roughness: 0.2,
+                    metalness: 0.5
+                });
+
+                const rack = new THREE.Mesh(geometry, material);
+                
+                // Position grid centered
+                const x = (c - cols/2) * 1.5 + 0.75;
+                const z = (r - rows/2) * 2 + 1;
+                
+                rack.position.set(x, 1, z);
+                rack.castShadow = true;
+                rack.receiveShadow = true;
+                
+                // Store custom data
+                rack.userData = { 
+                    energy: Math.random(), 
+                    isOverloaded: false 
+                };
+
+                scene.add(rack);
+                racks.push(rack);
+            }
+        }
+
+        // 5. Animation Loop
+        let lastUpdate = 0;
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+
+            // Rotate Scene slowly for effect
+            const angle = time * 0.0001;
+            camera.position.x = Math.sin(angle) * 14;
+            camera.position.z = Math.cos(angle) * 14;
+            camera.lookAt(0, 0, 0);
+
+            // Update Logic (Every 2 seconds)
+            if (time - lastUpdate > 2000) {
+                lastUpdate = time;
+                updateRacks();
+            }
+
+            // Pulse Effect for Red Racks
+            racks.forEach(rack => {
+                if (rack.userData.isOverloaded) {
+                    // Pulse scale slightly
+                    rack.scale.y = 1 + Math.sin(time * 0.005) * 0.05;
+                } else {
+                    rack.scale.y = 1;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        function updateRacks() {
+            racks.forEach(rack => {
+                // Randomize energy
+                rack.userData.energy += (Math.random() - 0.5) * 0.4;
+                rack.userData.energy = Math.max(0, Math.min(1, rack.userData.energy));
+
+                // Check Threshold
+                const isOverloaded = rack.userData.energy > 0.8;
+                rack.userData.isOverloaded = isOverloaded;
+
+                // Update Color
+                if (isOverloaded) {
+                    rack.material.color.setHex(0xff3333); // Red
+                    rack.material.emissive.setHex(0xff3333);
+                    rack.material.emissiveIntensity = 0.6;
+                } else {
+                    rack.material.color.setHex(0x33ff57); // Green
+                    rack.material.emissive.setHex(0x33ff57);
+                    rack.material.emissiveIntensity = 0.1;
+                }
+            });
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate(0);
+    </script>
+</body>
+</html>
