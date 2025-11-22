@@ -103,6 +103,9 @@
         <div style="font-size: 13px; margin: 5px 0;">
             <span style="color: #aaa;">Active Racks:</span> <span id="status" style="font-weight: 600;">Loading...</span>
         </div>
+        <div style="font-size: 13px; margin: 5px 0;">
+            <span style="color: #aaa;">Migration Cost:</span> <span id="migrationCost" style="font-weight: 600;">N/A</span>
+        </div>
         <div class="legend" style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
             <div style="font-size: 12px; font-weight: 600; margin-bottom: 5px;">Temperature Scale</div>
             <div style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
@@ -529,6 +532,23 @@
             create3DRacks();
             animate(0);
             document.getElementById('status').textContent = `${datacenterData.length} Racks`;
+
+            // If injected data contains optimization metrics, show migration cost with units
+            try {
+                const migrationCostEl = document.getElementById('migrationCost');
+                // Look for common places metrics might be injected
+                const metrics = (window.DATACENTER_DATA && (window.DATACENTER_DATA.metrics || window.DATACENTER_DATA.meta)) || window.DATACENTER_METRICS || null;
+                const totalCost = metrics && (metrics.total_cost || metrics.totalCost || metrics.migration_cost);
+                if (totalCost !== undefined && totalCost !== null) {
+                    migrationCostEl.textContent = `Cost: ${totalCost} Units`;
+                } else if (window.DATACENTER_DATA && window.DATACENTER_DATA.total_cost) {
+                    migrationCostEl.textContent = `Cost: ${window.DATACENTER_DATA.total_cost} Units`;
+                } else {
+                    migrationCostEl.textContent = 'N/A';
+                }
+            } catch (e) {
+                // ignore
+            }
         }
 
         // Start everything

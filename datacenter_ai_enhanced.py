@@ -413,6 +413,7 @@ def optimize_workload_lp(df: pd.DataFrame,
                 "To": df.at[cand_idx, "Rack_ID"],
                 "CPU_Moved": round(chunk, 2),
                 "Cost": round(chunk_cost, 2),
+                "Cost_Units": "units",
                 "Distance": distance
             })
     
@@ -803,7 +804,7 @@ def main():
             df_opt, transfers, metrics = optimize_workload_lp(df_pred, max_migration_cost)
         
         if metrics["status"] == "Success" and len(transfers) > 0:
-            step3_status.success(f"**Step 3:** Plan ready: {len(transfers)} migrations | Cost: {metrics['total_cost']:.1f}")
+            step3_status.success(f"**Step 3:** Plan ready: {len(transfers)} migrations | Cost: {metrics['total_cost']:.1f} Units")
             
             # Step 4: Execute with smooth animation
             step4_status.info(f"**Step 4:** Executing {len(transfers)} migrations...")
@@ -880,18 +881,24 @@ def main():
             col_after3.metric("Total Power", 
                        f"{metrics['total_power_after']:.1f} kW",
                        delta=f"{metrics['total_power_after'] - metrics['total_power_before']:.1f} kW")
-            col_after4.metric("Migration Cost", f"{metrics['total_cost']:.1f} units")
+            col_after4.metric("Migration Cost", f"Cost: {metrics['total_cost']:.1f} Units")
             
             st.success(f"✅ Successfully eliminated {metrics['hotspots_before'] - metrics['hotspots_after']} hotspots! Temperature reduced by {metrics['max_temp_before'] - metrics['max_temp_after']:.1f}°C")
             
             # Detailed migration plan
             with st.expander("View Detailed Migration Plan"):
                 transfers_df = pd.DataFrame(transfers)
-                st.dataframe(transfers_df, use_container_width=True)
-                
+
+                # Display Cost with units when available
+                display_df = transfers_df.copy()
+                if 'Cost_Units' in display_df.columns and 'Cost' in display_df.columns:
+                    display_df['Cost'] = display_df.apply(lambda r: f"Cost: {r['Cost']} {str(r['Cost_Units']).capitalize()}", axis=1)
+
+                st.dataframe(display_df, use_container_width=True)
+
                 avg_distance = np.mean([t["Distance"] for t in transfers])
                 total_cpu_moved = sum([t["CPU_Moved"] for t in transfers])
-                
+
                 st.info(f"""
                 **Migration Summary:**
                 - Total CPU % moved: {total_cpu_moved:.1f}%
