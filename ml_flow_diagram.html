@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataCool: ML + Optimization Flow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .title {
+            text-align: center;
+            color: white;
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 50px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            animation: fadeInDown 0.8s ease;
+        }
+
+        .flow-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .block {
+            flex: 1;
+            min-width: 200px;
+            background: white;
+            border-radius: 20px;
+            padding: 30px 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            position: relative;
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.8s ease;
+            animation-fill-mode: both;
+        }
+
+        .block:nth-child(1) { animation-delay: 0.1s; }
+        .block:nth-child(2) { animation-delay: 0.2s; }
+        .block:nth-child(3) { animation-delay: 0.3s; }
+        .block:nth-child(4) { animation-delay: 0.4s; }
+        .block:nth-child(5) { animation-delay: 0.5s; }
+
+        .block:hover {
+            transform: translateY(-10px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+        }
+
+        .block::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 8px;
+            border-radius: 20px 20px 0 0;
+        }
+
+        .block-1::before { background: linear-gradient(135deg, #667eea, #4A90E2); }
+        .block-2::before { background: linear-gradient(135deg, #9b59b6, #7B68EE); }
+        .block-3::before { background: linear-gradient(135deg, #50C878, #27ae60); }
+        .block-4::before { background: linear-gradient(135deg, #FF9500, #f39c12); }
+        .block-5::before { background: linear-gradient(135deg, #FF6B6B, #e74c3c); }
+
+        .block-number {
+            position: absolute;
+            top: -15px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2em;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .block-1 .block-number { background: linear-gradient(135deg, #667eea, #4A90E2); }
+        .block-2 .block-number { background: linear-gradient(135deg, #9b59b6, #7B68EE); }
+        .block-3 .block-number { background: linear-gradient(135deg, #50C878, #27ae60); }
+        .block-4 .block-number { background: linear-gradient(135deg, #FF9500, #f39c12); }
+        .block-5 .block-number { background: linear-gradient(135deg, #FF6B6B, #e74c3c); }
+
+        .block-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            margin-bottom: 15px;
+            margin-top: 10px;
+            color: #2c3e50;
+        }
+
+        .block-content {
+            color: #555;
+            line-height: 1.6;
+            font-size: 0.95em;
+        }
+
+        .block-content ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .block-content li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .block-content li::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .equation {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 12px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            text-align: center;
+            font-weight: 600;
+            color: #2c3e50;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .arrow {
+            font-size: 3em;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            animation: pulse 2s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+
+        .metrics {
+            margin-top: 50px;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+            animation: fadeInUp 0.8s ease 0.6s both;
+        }
+
+        .metric-item {
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .metric-label {
+            font-size: 1em;
+            color: #666;
+            margin-top: 5px;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+
+        @media (max-width: 1200px) {
+            .flow-container {
+                flex-direction: column;
+            }
+            .arrow {
+                transform: rotate(90deg);
+            }
+        }
+
+        /* Tooltip styles */
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 1000;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .block:hover .tooltip {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">DataCool: ML + Optimization Flow</h1>
+        
+        <div class="flow-container">
+            <!-- Block 1 -->
+            <div class="block block-1">
+                <div class="block-number">1</div>
+                <div class="tooltip">Input Features</div>
+                <h2 class="block-title">DATA INPUT</h2>
+                <div class="block-content">
+                    <ul>
+                        <li>24 Server Racks</li>
+                        <li>5 Features/Rack</li>
+                    </ul>
+                    <div class="equation">
+                        X = [CPU, Temp,<br>
+                        Network,<br>
+                        Power, Zone]
+                    </div>
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <!-- Block 2 -->
+            <div class="block block-2">
+                <div class="block-number">2</div>
+                <div class="tooltip">Gradient Boosting</div>
+                <h2 class="block-title">ML PREDICTION</h2>
+                <div class="block-content">
+                    <ul>
+                        <li>Histogram Gradient Boosting</li>
+                        <li>94% Accuracy</li>
+                    </ul>
+                    <div class="equation">
+                        f(x) = Σ αₜhₜ(x)
+                    </div>
+                    <div class="equation">
+                        P = 1/(1+e<sup>-f(x)</sup>)
+                    </div>
+                    <div style="text-align: center; margin-top: 10px; color: #7B68EE; font-weight: bold;">
+                        → Hotspot if P > 0.5
+                    </div>
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <!-- Block 3 -->
+            <div class="block block-3">
+                <div class="block-number">3</div>
+                <div class="tooltip">SHAP Values</div>
+                <h2 class="block-title">EXPLAINABILITY</h2>
+                <div class="block-content">
+                    <ul>
+                        <li>SHAP Analysis</li>
+                        <li>Feature Importance</li>
+                    </ul>
+                    <div class="equation">
+                        φᵢ = Contribution<br>
+                        of Feature i
+                    </div>
+                    <div style="text-align: center; margin-top: 10px; color: #27ae60; font-weight: bold;">
+                        Top: CPU, Temp
+                    </div>
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <!-- Block 4 -->
+            <div class="block block-4">
+                <div class="block-number">4</div>
+                <div class="tooltip">Constraint-Based</div>
+                <h2 class="block-title">OPTIMIZATION</h2>
+                <div class="block-content">
+                    <div style="margin-bottom: 10px; font-weight: 600;">Objective:</div>
+                    <div class="equation">
+                        min(max Tᵢ)
+                    </div>
+                    <div style="margin: 10px 0; font-weight: 600;">Constraints:</div>
+                    <div class="equation">
+                        CPUᵢ ≤ 95%<br>
+                        Σ Cost ≤ Budget
+                    </div>
+                    <div class="equation">
+                        Cost = CPU × 0.5<br>
+                        × (1 + 0.2×d)
+                    </div>
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <!-- Block 5 -->
+            <div class="block block-5">
+                <div class="block-number">5</div>
+                <div class="tooltip">Thermal Physics</div>
+                <h2 class="block-title">PHYSICS UPDATE</h2>
+                <div class="block-content">
+                    <div style="margin-bottom: 10px; font-weight: 600;">Thermal Model:</div>
+                    <div class="equation">
+                        T = T₀ + 0.52×CPU<br>
+                        + 0.01×Net<br>
+                        + Σ(0.1×Tₙ)
+                    </div>
+                    <div style="text-align: center; margin-top: 10px; color: #e74c3c; font-weight: bold;">
+                        Result: -8°C<br>
+                        -75% hotspots
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="metrics">
+            <div class="metric-item">
+                <div class="metric-value">94%</div>
+                <div class="metric-label">Accuracy</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-value">4 → 1</div>
+                <div class="metric-label">Hotspots</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-value">-7.1°C</div>
+                <div class="metric-label">Temperature</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-value">5</div>
+                <div class="metric-label">Transfers</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add interactive hover effects
+        document.querySelectorAll('.block').forEach(block => {
+            block.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-10px) scale(1.05)';
+            });
+            block.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+
+        // Animate arrows on hover
+        document.querySelectorAll('.arrow').forEach(arrow => {
+            setInterval(() => {
+                arrow.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    arrow.style.transform = 'scale(1)';
+                }, 300);
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
+

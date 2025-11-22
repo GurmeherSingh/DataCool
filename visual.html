@@ -2,16 +2,89 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Data Cool - 3D Preview</title>
+    <title>Data Cool - AI Optimizer Dashboard</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; }
         #ui {
             position: absolute; top: 20px; left: 20px; color: white;
             background: rgba(0,0,0,0.7); padding: 20px; border-radius: 8px;
-            pointer-events: none; user-select: none;
+            user-select: none; z-index: 10;
         }
         .legend { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
         .dot { width: 15px; height: 15px; border-radius: 50%; }
+        
+        #toggleBtn {
+            background: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 14px;
+            margin-top: 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        #toggleBtn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        
+        #canvas2d {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        #rackInfo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            background: rgba(0,0,0,0.85);
+            padding: 20px;
+            border-radius: 8px;
+            min-width: 250px;
+            display: none;
+            z-index: 10;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #rackInfo h3 {
+            margin: 0 0 15px 0;
+            color: #4CAF50;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 5px;
+        }
+        #rackInfo .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 5px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 3px;
+        }
+        #rackInfo .label {
+            font-weight: bold;
+            color: #aaa;
+        }
+        #rackInfo .value {
+            color: #fff;
+        }
+        #closeInfo {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff3333;
+            border: none;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+        }
     </style>
     <script type="importmap">
       {
@@ -23,21 +96,93 @@
 </head>
 <body>
     <div id="ui">
-        <h1 style="margin: 0 0 10px 0;">Data Cool: AI Optimizer</h1>
-        <div>Status: <span id="status">Monitoring...</span></div>
-        <div class="legend">
-            <div class="dot" style="background: #33ff57;"></div> Optimized
-            <div class="dot" style="background: #ff3333;"></div> Overloaded
+        <h1 style="margin: 0 0 10px 0; font-size: 20px; font-weight: 600;">DataCool Thermal Monitor</h1>
+        <div style="font-size: 13px; margin: 5px 0;">
+            <span style="color: #aaa;">View Mode:</span> <span id="viewMode" style="font-weight: 600;">3D</span>
         </div>
+        <div style="font-size: 13px; margin: 5px 0;">
+            <span style="color: #aaa;">Active Racks:</span> <span id="status" style="font-weight: 600;">Loading...</span>
+        </div>
+        <div class="legend" style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 12px; font-weight: 600; margin-bottom: 5px;">Temperature Scale</div>
+            <div style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
+                <div class="dot" style="background: #313695; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #4575b4; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #74add1; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #abd9e9; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #e0f3f8; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #ffffbf; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #fee090; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #fdae61; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #f46d43; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #d73027; width: 12px; height: 12px;"></div>
+                <div class="dot" style="background: #a50026; width: 12px; height: 12px;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #999;">
+                <span>Cool (25°C)</span>
+                <span>Hot (80°C)</span>
+            </div>
+        </div>
+        <button id="toggleBtn" style="margin-top: 15px;">Switch to 2D View</button>
     </div>
+    
+    <div id="rackInfo">
+        <button id="closeInfo">×</button>
+        <div id="rackInfoContent"></div>
+    </div>
+    
+    <canvas id="canvas2d"></canvas>
 
     <script type="module">
         import * as THREE from 'three';
 
-        // 1. Scene Setup
+        // ===== GLOBAL STATE =====
+        let datacenterData = null;
+        let currentView = '3D';
+        let racks3D = [];
+        let racks2D = [];
+        let selectedRack = null;
+
+        // ===== LOAD DATA =====
+        async function loadData() {
+            try {
+                const response = await fetch('datacenter_data.json');
+                const data = await response.json();
+                datacenterData = data.after || data.before;
+                console.log('Loaded rack data:', datacenterData.length, 'racks');
+                initVisualizations();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                // Use fallback data
+                generateFallbackData();
+                initVisualizations();
+            }
+        }
+
+        function generateFallbackData() {
+            datacenterData = [];
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 6; col++) {
+                    const idx = row * 6 + col;
+                    datacenterData.push({
+                        Rack_ID: `R-${String(idx + 1).padStart(3, '0')}`,
+                        CPU_load: Math.random() * 100,
+                        Temperature: 25 + Math.random() * 50,
+                        Network_usage: Math.random() * 800,
+                        Power_consumption: Math.random() * 8,
+                        Row: row,
+                        Col: col,
+                        Hotspot: Math.random() > 0.8 ? 1 : 0,
+                        Predicted: Math.random() > 0.8 ? 1 : 0
+                    });
+                }
+            }
+        }
+
+        // ===== 3D VISUALIZATION =====
         const scene = new THREE.Scene();
         scene.background = new THREE.Color('#111');
-        scene.fog = new THREE.Fog('#111', 10, 25);
+        scene.fog = new THREE.Fog('#111', 10, 30);
 
         const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(8, 8, 12);
@@ -48,7 +193,7 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // 2. Lights
+        // Lights
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         scene.add(ambientLight);
 
@@ -57,7 +202,7 @@
         dirLight.castShadow = true;
         scene.add(dirLight);
 
-        // 3. Floor
+        // Floor
         const floorGeo = new THREE.PlaneGeometry(20, 20);
         const floorMat = new THREE.MeshStandardMaterial({ color: '#222', roughness: 0.8, metalness: 0.2 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -65,106 +210,329 @@
         floor.receiveShadow = true;
         scene.add(floor);
 
-        // 4. Create Racks
-        const rows = 6;
-        const cols = 8;
-        const racks = [];
-        const geometry = new THREE.BoxGeometry(0.8, 2, 0.8);
-        
-        for(let r=0; r<rows; r++) {
-            for(let c=0; c<cols; c++) {
-                // Material (Green initially)
+        // Raycaster for click detection
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function create3DRacks() {
+            // Clear existing racks
+            racks3D.forEach(rack => scene.remove(rack));
+            racks3D = [];
+
+            const geometry = new THREE.BoxGeometry(0.8, 2, 0.8);
+            const maxRow = Math.max(...datacenterData.map(d => d.Row));
+            const maxCol = Math.max(...datacenterData.map(d => d.Col));
+
+            datacenterData.forEach(data => {
+                const color = getRackColor(data);
                 const material = new THREE.MeshStandardMaterial({ 
-                    color: 0x33ff57, 
-                    emissive: 0x33ff57,
-                    emissiveIntensity: 0.1,
+                    color: color, 
+                    emissive: color,
+                    emissiveIntensity: data.Predicted === 1 ? 0.6 : 0.1,
                     roughness: 0.2,
                     metalness: 0.5
                 });
 
                 const rack = new THREE.Mesh(geometry, material);
                 
-                // Position grid centered
-                const x = (c - cols/2) * 1.5 + 0.75;
-                const z = (r - rows/2) * 2 + 1;
+                // Position based on row/col
+                const x = (data.Col - maxCol/2) * 1.5 + 0.75;
+                const z = (data.Row - maxRow/2) * 2 + 1;
                 
                 rack.position.set(x, 1, z);
                 rack.castShadow = true;
                 rack.receiveShadow = true;
-                
-                // Store custom data
-                rack.userData = { 
-                    energy: Math.random(), 
-                    isOverloaded: false 
-                };
+                rack.userData = data;
 
                 scene.add(rack);
-                racks.push(rack);
-            }
+                racks3D.push(rack);
+            });
         }
 
-        // 5. Animation Loop
-        let lastUpdate = 0;
+        // ===== 2D VISUALIZATION =====
+        const canvas2d = document.getElementById('canvas2d');
+        const ctx = canvas2d.getContext('2d');
+
+        function setup2DCanvas() {
+            canvas2d.width = window.innerWidth;
+            canvas2d.height = window.innerHeight;
+        }
+
+        function draw2DRacks() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas2d.width, canvas2d.height);
+
+            const maxRow = Math.max(...datacenterData.map(d => d.Row));
+            const maxCol = Math.max(...datacenterData.map(d => d.Col));
+            
+            const rackWidth = 80;
+            const rackHeight = 60;
+            const gapX = 20;
+            const gapY = 20;
+            
+            const gridWidth = (maxCol + 1) * (rackWidth + gapX);
+            const gridHeight = (maxRow + 1) * (rackHeight + gapY);
+            const offsetX = (canvas2d.width - gridWidth) / 2;
+            const offsetY = (canvas2d.height - gridHeight) / 2;
+
+            racks2D = [];
+
+            datacenterData.forEach(data => {
+                const x = offsetX + data.Col * (rackWidth + gapX);
+                const y = offsetY + data.Row * (rackHeight + gapY);
+                
+                const color = getRackColorString(data);
+                
+                // Draw rack rectangle
+                ctx.fillStyle = color;
+                ctx.fillRect(x, y, rackWidth, rackHeight);
+                
+                // Add border (thicker for predicted hotspots)
+                if (data.Predicted === 1) {
+                    ctx.strokeStyle = '#d73027';
+                    ctx.lineWidth = 3;
+                } else {
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 1;
+                }
+                ctx.strokeRect(x, y, rackWidth, rackHeight);
+                
+                // Add rack label (black text for better visibility)
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(data.Rack_ID, x + rackWidth/2, y + rackHeight/2 - 5);
+                
+                // Add temperature
+                ctx.fillStyle = '#000';
+                ctx.font = '10px sans-serif';
+                ctx.fillText(`${data.Temperature.toFixed(1)}°C`, x + rackWidth/2, y + rackHeight/2 + 10);
+                
+                // Store for click detection
+                racks2D.push({ x, y, width: rackWidth, height: rackHeight, data });
+            });
+        }
+
+        // RdYlBu_r colorscale from Plotly (matches dashboard heatmap)
+        const colorStops = [
+            { pos: 0.0, color: [49, 54, 149] },      // #313695 - Deep Blue
+            { pos: 0.1, color: [69, 117, 180] },     // #4575b4 - Blue
+            { pos: 0.2, color: [116, 173, 209] },    // #74add1 - Light Blue
+            { pos: 0.3, color: [171, 217, 233] },    // #abd9e9 - Pale Blue
+            { pos: 0.4, color: [224, 243, 248] },    // #e0f3f8 - Very Pale Blue
+            { pos: 0.5, color: [255, 255, 191] },    // #ffffbf - Yellow
+            { pos: 0.6, color: [254, 224, 144] },    // #fee090 - Light Yellow
+            { pos: 0.7, color: [253, 174, 97] },     // #fdae61 - Orange
+            { pos: 0.8, color: [244, 109, 67] },     // #f46d43 - Red-Orange
+            { pos: 0.9, color: [215, 48, 39] },      // #d73027 - Red
+            { pos: 1.0, color: [165, 0, 38] }        // #a50026 - Deep Red
+        ];
+
+        function getTempNormalized(temp) {
+            // Normalize temperature between min (25°C) and max (80°C)
+            const minTemp = 25;
+            const maxTemp = 80;
+            return Math.max(0, Math.min(1, (temp - minTemp) / (maxTemp - minTemp)));
+        }
+
+        function interpolateColorStops(factor) {
+            // Find the two color stops to interpolate between
+            let lowerStop = colorStops[0];
+            let upperStop = colorStops[colorStops.length - 1];
+            
+            for (let i = 0; i < colorStops.length - 1; i++) {
+                if (factor >= colorStops[i].pos && factor <= colorStops[i + 1].pos) {
+                    lowerStop = colorStops[i];
+                    upperStop = colorStops[i + 1];
+                    break;
+                }
+            }
+            
+            // Calculate position between the two stops
+            const localFactor = (factor - lowerStop.pos) / (upperStop.pos - lowerStop.pos);
+            
+            // Interpolate RGB values
+            const r = Math.round(lowerStop.color[0] + (upperStop.color[0] - lowerStop.color[0]) * localFactor);
+            const g = Math.round(lowerStop.color[1] + (upperStop.color[1] - lowerStop.color[1]) * localFactor);
+            const b = Math.round(lowerStop.color[2] + (upperStop.color[2] - lowerStop.color[2]) * localFactor);
+            
+            return { r, g, b };
+        }
+
+        function getRackColor(data) {
+            // Get normalized temperature (0-1)
+            const factor = getTempNormalized(data.Temperature);
+            
+            // Get RGB from colorscale
+            const rgb = interpolateColorStops(factor);
+            
+            // Return as hex color for Three.js
+            return (rgb.r << 16) | (rgb.g << 8) | rgb.b;
+        }
+
+        function getRackColorString(data) {
+            const factor = getTempNormalized(data.Temperature);
+            const rgb = interpolateColorStops(factor);
+            return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+        }
+
+        // ===== RACK INFO DISPLAY =====
+        function showRackInfo(data) {
+            selectedRack = data;
+            const infoDiv = document.getElementById('rackInfo');
+            const contentDiv = document.getElementById('rackInfoContent');
+            
+            contentDiv.innerHTML = `
+                <h3>${data.Rack_ID}</h3>
+                <div class="info-row">
+                    <span class="label">Position:</span>
+                    <span class="value">Row ${data.Row}, Col ${data.Col}</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">CPU Load:</span>
+                    <span class="value">${data.CPU_load.toFixed(1)}%</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Temperature:</span>
+                    <span class="value">${data.Temperature.toFixed(1)}°C</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Network:</span>
+                    <span class="value">${data.Network_usage.toFixed(1)} Mbps</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Power:</span>
+                    <span class="value">${data.Power_consumption.toFixed(2)} kW</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Status:</span>
+                    <span class="value" style="color: ${getRackColorString(data)}; font-weight: 600;">
+                        ${data.Temperature > 70 ? 'CRITICAL' : data.Temperature > 60 ? 'WARNING' : 'NORMAL'}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="label">AI Prediction:</span>
+                    <span class="value" style="color: ${data.Predicted === 1 ? '#d73027' : '#4575b4'}">
+                        ${data.Predicted === 1 ? 'Hotspot Risk' : 'Optimal'}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Hotspot Status:</span>
+                    <span class="value" style="color: ${data.Hotspot === 1 ? '#d73027' : '#4575b4'}; font-weight: 600;">
+                        ${data.Hotspot === 1 ? 'ACTIVE' : 'RESOLVED'}
+                    </span>
+                </div>
+                ${data.Hotspot === 1 ? '<div class="info-row"><span class="label" style="color: #d73027; font-weight: 600;">⚠ HOTSPOT: CPU > 75% AND Temp > 65°C</span></div>' : ''}
+            `;
+            
+            infoDiv.style.display = 'block';
+        }
+
+        function hideRackInfo() {
+            document.getElementById('rackInfo').style.display = 'none';
+            selectedRack = null;
+        }
+
+        // ===== EVENT HANDLERS =====
+        document.getElementById('toggleBtn').addEventListener('click', toggleView);
+        document.getElementById('closeInfo').addEventListener('click', hideRackInfo);
+
+        function toggleView() {
+            currentView = currentView === '3D' ? '2D' : '3D';
+            
+            if (currentView === '2D') {
+                renderer.domElement.style.display = 'none';
+                canvas2d.style.display = 'block';
+                document.getElementById('toggleBtn').textContent = 'Switch to 3D View';
+                document.getElementById('viewMode').textContent = '2D';
+                draw2DRacks();
+            } else {
+                renderer.domElement.style.display = 'block';
+                canvas2d.style.display = 'none';
+                document.getElementById('toggleBtn').textContent = 'Switch to 2D View';
+                document.getElementById('viewMode').textContent = '3D';
+            }
+            hideRackInfo();
+        }
+
+        // Click handler for 3D
+        renderer.domElement.addEventListener('click', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(racks3D);
+
+            if (intersects.length > 0) {
+                const rack = intersects[0].object;
+                showRackInfo(rack.userData);
+            }
+        });
+
+        // Click handler for 2D
+        canvas2d.addEventListener('click', (event) => {
+            const rect = canvas2d.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            for (const rack of racks2D) {
+                if (x >= rack.x && x <= rack.x + rack.width &&
+                    y >= rack.y && y <= rack.y + rack.height) {
+                    showRackInfo(rack.data);
+                    break;
+                }
+            }
+        });
+
+        // ===== ANIMATION LOOP =====
+        let animationTime = 0;
 
         function animate(time) {
             requestAnimationFrame(animate);
+            animationTime = time;
 
-            // Rotate Scene slowly for effect
-            const angle = time * 0.0001;
-            camera.position.x = Math.sin(angle) * 14;
-            camera.position.z = Math.cos(angle) * 14;
-            camera.lookAt(0, 0, 0);
+            if (currentView === '3D') {
+                // Rotate camera
+                const angle = time * 0.0001;
+                camera.position.x = Math.sin(angle) * 14;
+                camera.position.z = Math.cos(angle) * 14;
+                camera.lookAt(0, 0, 0);
 
-            // Update Logic (Every 2 seconds)
-            if (time - lastUpdate > 2000) {
-                lastUpdate = time;
-                updateRacks();
+                // Pulse effect for problematic racks
+                racks3D.forEach(rack => {
+                    if (rack.userData.Predicted === 1) {
+                        rack.scale.y = 1 + Math.sin(time * 0.005) * 0.08;
+                    } else {
+                        rack.scale.y = 1;
+                    }
+                });
+
+                renderer.render(scene, camera);
             }
-
-            // Pulse Effect for Red Racks
-            racks.forEach(rack => {
-                if (rack.userData.isOverloaded) {
-                    // Pulse scale slightly
-                    rack.scale.y = 1 + Math.sin(time * 0.005) * 0.05;
-                } else {
-                    rack.scale.y = 1;
-                }
-            });
-
-            renderer.render(scene, camera);
         }
 
-        function updateRacks() {
-            racks.forEach(rack => {
-                // Randomize energy
-                rack.userData.energy += (Math.random() - 0.5) * 0.4;
-                rack.userData.energy = Math.max(0, Math.min(1, rack.userData.energy));
-
-                // Check Threshold
-                const isOverloaded = rack.userData.energy > 0.8;
-                rack.userData.isOverloaded = isOverloaded;
-
-                // Update Color
-                if (isOverloaded) {
-                    rack.material.color.setHex(0xff3333); // Red
-                    rack.material.emissive.setHex(0xff3333);
-                    rack.material.emissiveIntensity = 0.6;
-                } else {
-                    rack.material.color.setHex(0x33ff57); // Green
-                    rack.material.emissive.setHex(0x33ff57);
-                    rack.material.emissiveIntensity = 0.1;
-                }
-            });
-        }
-
-        // Handle Resize
+        // ===== RESIZE HANDLER =====
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            setup2DCanvas();
+            if (currentView === '2D') {
+                draw2DRacks();
+            }
         });
 
-        animate(0);
+        // ===== INITIALIZATION =====
+        function initVisualizations() {
+            setup2DCanvas();
+            create3DRacks();
+            animate(0);
+            document.getElementById('status').textContent = `${datacenterData.length} Racks`;
+        }
+
+        // Start everything
+        loadData();
     </script>
 </body>
 </html>

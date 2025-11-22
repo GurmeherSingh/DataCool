@@ -29,6 +29,8 @@ import shap
 import math
 from typing import Tuple, List, Dict, Optional
 import warnings
+import json
+import time
 warnings.filterwarnings('ignore')
 
 # =============================================================================
@@ -43,22 +45,22 @@ DEFAULT_RACK_COUNT = 24
 GRID_COLS = 6  # Grid layout for visualization
 GRID_ROWS = 4
 
-# Enhanced physics model coefficients
-TEMP_AMBIENT = 20.0          # Ambient data center temperature (°C)
-TEMP_CPU_COEFF = 0.45        # °C per % CPU load
-TEMP_NET_COEFF = 0.01        # °C per MB/s network
-TEMP_ADJACENCY_COEFF = 0.08  # Thermal coupling between adjacent racks
+# Enhanced physics model coefficients (tuned to create realistic hotspots)
+TEMP_AMBIENT = 21.0          # Ambient data center temperature (°C)
+TEMP_CPU_COEFF = 0.52        # °C per % CPU load
+TEMP_NET_COEFF = 0.015       # °C per MB/s network
+TEMP_ADJACENCY_COEFF = 0.10  # Thermal coupling between adjacent racks
 TEMP_ZONE_INFLUENCE = 1.5    # Hot zones affect nearby racks
-TEMP_NOISE_STD = 1.0
+TEMP_NOISE_STD = 1.5         # Random temperature variation
 
 POWER_BASE = 0.5             # Base power draw (kW)
 POWER_CPU_COEFF = 0.06       # kW per % CPU
 POWER_NET_COEFF = 0.001      # kW per MB/s
 POWER_NOISE_STD = 0.08
 
-# Hotspot thresholds
-HOT_CPU_THRESHOLD = 80.0
-HOT_TEMP_THRESHOLD = 70.0
+# Hotspot thresholds (tuned to catch more hotspots for optimization demo)
+HOT_CPU_THRESHOLD = 75.0
+HOT_TEMP_THRESHOLD = 65.0
 
 # Migration parameters
 MIGRATION_COST_PER_PCT = 0.5  # Cost units per % CPU migrated
@@ -126,7 +128,7 @@ def compute_temperature_with_physics(cpu_loads: np.ndarray,
             base_offsets)
     
     # Zone temperature penalties (poor cooling zones are hotter)
-    zone_penalties = np.array([0.0, 2.5, 5.0])  # °C penalty per zone
+    zone_penalties = np.array([0.0, 3.0, 6.5])  # °C penalty per zone
     temp += zone_penalties[zones]
     
     # Thermal coupling: hot neighbors increase your temperature
@@ -138,7 +140,7 @@ def compute_temperature_with_physics(cpu_loads: np.ndarray,
             if adjacent:
                 avg_neighbor_temp = np.mean(temp[adjacent])
                 temp_influence[i] = TEMP_ADJACENCY_COEFF * (avg_neighbor_temp - temp[i])
-        temp += temp_influence * 0.5  # Damping factor
+        temp += temp_influence * 0.6  # Damping factor
     
     # Add noise and clip
     temp += np.random.normal(0, TEMP_NOISE_STD, size=n_racks)
@@ -160,28 +162,33 @@ def generate_racks(n_racks: int, seed: int = RANDOM_SEED) -> pd.DataFrame:
     """
     np.random.seed(seed)
     
-    # Generate CPU loads with realistic distribution
-    # Mix of idle, medium, and high-load racks
-    # Ensure we have at least 3-5 racks that will likely be hotspots
-    n_low = int(n_racks * 0.45)
-    n_medium = int(n_racks * 0.35)
-    n_high = n_racks - n_low - n_medium
-    
-    cpu_low = np.random.beta(2, 5, n_low) * 50
-    cpu_medium = np.random.beta(3, 3, n_medium) * 60 + 30
-    cpu_high = np.random.beta(5, 2, n_high) * 30 + 70  # Guaranteed 70-100%
-    
-    cpu_load = np.concatenate([cpu_low, cpu_medium, cpu_high])
-    np.random.shuffle(cpu_load)
-    cpu_load = np.clip(cpu_load + np.random.normal(0, 3, n_racks), 0, 100)
-    
-    # Network usage: somewhat correlated with CPU
-    network_base = np.random.exponential(120, n_racks)
-    network_cpu_bonus = cpu_load * 2.5  # High CPU often means high network
-    network_usage = np.clip(network_base + network_cpu_bonus + np.random.normal(0, 50, n_racks), 0, 1000)
-    
-    # Assign thermal zones
+    # Assign thermal zones FIRST
     zones = assign_thermal_zones(n_racks)
+    
+    # Generate CPU loads strategically to create SOME hotspots but keep others cool
+    cpu_load = np.zeros(n_racks)
+    
+    for i in range(n_racks):
+        if zones[i] == 2:  # Poor cooling zone - Create hotspots here
+            # Mix of very high and medium loads in zone 2
+            if np.random.random() < 0.7:  # 70% high load
+                cpu_load[i] = np.random.beta(5, 2) * 18 + 78  # 78-96%
+            else:  # 30% medium load
+                cpu_load[i] = np.random.beta(3, 3) * 30 + 50  # 50-80%
+        elif zones[i] == 1:  # Medium cooling - MIXED LOADS
+            # 40-75% CPU for racks in Zone 1
+            cpu_load[i] = np.random.beta(3, 3) * 35 + 40
+        else:  # Good cooling (Zone 0) - LOWER LOADS (will be candidates for optimization)
+            # 10-55% CPU for racks in Zone 0
+            cpu_load[i] = np.random.beta(2, 5) * 45 + 10
+    
+    # Add some variation
+    cpu_load = np.clip(cpu_load + np.random.normal(0, 2, n_racks), 5, 100)
+    
+    # Network usage: correlated with CPU but not extreme
+    network_base = np.random.exponential(100, n_racks)
+    network_cpu_bonus = cpu_load * 2.8  # Moderate correlation
+    network_usage = np.clip(network_base + network_cpu_bonus + np.random.normal(0, 40, n_racks), 10, 1000)
     
     # Rack-specific temperature offsets (manufacturing variation)
     base_temp_offsets = np.random.normal(0, 1.5, n_racks)
@@ -282,6 +289,7 @@ def predict_all(df: pd.DataFrame, model, features: List[str]) -> pd.DataFrame:
     """Predict hotspot probabilities for all racks."""
     X = df[features].values
     proba = model.predict_proba(X)[:, 1]
+    # Use 0.5 threshold for balanced prediction
     pred = (proba >= 0.5).astype(int)
     
     df_copy = df.copy()
@@ -313,10 +321,26 @@ def optimize_workload_lp(df: pd.DataFrame,
         - metrics: Optimization metrics
     """
     n_racks = len(df)
-    hotspots = df[df["Predicted"] == 1].index.tolist()
-    candidates = df[df["Predicted"] == 0].index.tolist()
     
-    if len(hotspots) == 0 or len(candidates) == 0:
+    # Identify hotspots using BOTH AI prediction AND actual thermal/load thresholds
+    # This ensures we always have some candidates even if AI is too aggressive
+    hotspots = df[
+        ((df["Predicted"] == 1) | (df["Temperature"] > HOT_TEMP_THRESHOLD) | (df["CPU_load"] > HOT_CPU_THRESHOLD))
+    ].index.tolist()
+    
+    # Candidates are racks that are NOT hotspots and have spare capacity
+    candidates = df[
+        ((df["Predicted"] == 0) & (df["Temperature"] < 60) & (df["CPU_load"] < 70))
+    ].index.tolist()
+    
+    # If no candidates, use the coolest racks as fallback
+    if len(candidates) == 0:
+        # Sort by temperature and take the coolest 40% of racks
+        df_sorted = df.sort_values('Temperature')
+        num_candidates = max(3, int(n_racks * 0.4))
+        candidates = df_sorted.head(num_candidates).index.tolist()
+    
+    if len(hotspots) == 0:
         return df.copy(), [], {"status": "No optimization needed"}
     
     # Simplification: Use greedy algorithm with constraints (LP can be complex for hackathon)
@@ -539,20 +563,14 @@ def plot_metrics_comparison(metrics: Dict) -> go.Figure:
 # =============================================================================
 
 def main():
-    st.set_page_config(layout="wide", page_title="Enhanced Data Center AI Optimizer")
+    st.set_page_config(
+        layout="wide", 
+        page_title="DataCool - AI-Powered Datacenter Optimizer",
+        initial_sidebar_state="expanded"
+    )
     
-    st.title("🚀 Enhanced Data Center Hotspot Predictor & AI Optimizer")
-    st.markdown("""
-    **Advanced Features:**
-    - 🧠 **Histogram Gradient Boosting** (better than Random Forest)
-    - 🔍 **SHAP Explainability** for AI predictions
-    - ⚡ **LP-based Optimization** with constraints (capacity, migration cost)
-    - 🌡️ **Realistic Thermal Physics** (adjacency, zones, heat diffusion)
-    - 💰 **Migration Cost Simulation** and tracking
-    """)
-    
-    # Sidebar configuration
-    st.sidebar.title("⚙️ Configuration")
+    # Sidebar configuration (moved to top for clean UI)
+    st.sidebar.title("Configuration")
     
     with st.sidebar.expander("Simulation Settings", expanded=True):
         n_racks = st.slider("Number of racks", 20, 30, DEFAULT_RACK_COUNT)
@@ -561,6 +579,7 @@ def main():
     with st.sidebar.expander("Optimization Settings", expanded=True):
         max_migration_cost = st.slider("Max migration budget", 10.0, 200.0, MAX_MIGRATION_COST, step=10.0)
         enable_shap = st.checkbox("Show SHAP explainability", value=True)
+        animation_speed = st.slider("Animation speed (seconds per step)", 0.5, 3.0, 1.5, step=0.5)
     
     # Generate data
     with st.spinner("🔄 Generating simulated data center..."):
@@ -573,11 +592,330 @@ def main():
     # Make predictions
     df_pred = predict_all(df, model, features)
     
+    # Show hotspot information
+    hotspot_count = int(df_pred["Predicted"].sum())
+    actual_hotspots = int(df_pred["Hotspot"].sum())
+    max_temp = df_pred['Temperature'].max()
+    
+    if hotspot_count > 0:
+        st.success(f"System ready for optimization! Detected {hotspot_count} predicted hotspots (Peak temperature: {max_temp:.1f}°C)")
+    else:
+        st.warning(f"No hotspots detected by AI. Actual labeled hotspots: {actual_hotspots}. Temperature range: {df_pred['Temperature'].min():.1f}°C - {max_temp:.1f}°C. Try increasing the simulation or adjusting random seed.")
+    
     # =============================================================================
-    # SECTION 1: Model Performance
+    # LANDING PAGE: Interactive 3D/2D Visualization
     # =============================================================================
     
-    st.header("📊 AI Model Performance")
+    # Hero Section
+    st.title("DataCool: AI-Powered Datacenter Optimizer")
+    st.markdown("### Real-Time Thermal Management & Workload Optimization")
+    
+    # Key Metrics Row at Top
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric(
+            "Total Racks", 
+            len(df_pred),
+            help="Total number of server racks in the datacenter"
+        )
+    with col2:
+        hotspot_count = int(df_pred["Predicted"].sum())
+        st.metric(
+            "Predicted Hotspots", 
+            hotspot_count,
+            delta=f"{hotspot_count} critical" if hotspot_count > 0 else "All clear",
+            delta_color="inverse",
+            help="Racks predicted to exceed thermal thresholds"
+        )
+    with col3:
+        max_temp = df_pred['Temperature'].max()
+        st.metric(
+            "Peak Temperature", 
+            f"{max_temp:.1f}°C",
+            delta=f"{max_temp - 65:.1f}°C from threshold" if max_temp > 65 else None,
+            delta_color="inverse",
+            help="Highest temperature across all racks"
+        )
+    with col4:
+        avg_cpu = df_pred['CPU_load'].mean()
+        st.metric(
+            "Avg CPU Load", 
+            f"{avg_cpu:.1f}%",
+            help="Average CPU utilization across datacenter"
+        )
+    
+    st.markdown("---")
+    
+    # Main Visualization
+    st.header("Datacenter Thermal Visualization")
+    st.markdown("**Interactive 3D/2D view** - Toggle between perspectives and click any rack for detailed metrics. Color scale: Blue (Cool) → Yellow (Warm) → Red (Hot)")
+    
+    # Convert dataframe to JSON format for visualization
+    def df_to_json_format(df):
+        """Convert dataframe to the JSON format expected by visual.html"""
+        racks_data = []
+        for _, row in df.iterrows():
+            rack_data = {
+                "Rack_ID": row["Rack_ID"],
+                "CPU_load": float(row["CPU_load"]),
+                "Temperature": float(row["Temperature"]),
+                "Network_usage": float(row["Network_usage"]),
+                "Power_consumption": float(row["Power_consumption"]),
+                "Thermal_Zone": int(row["Thermal_Zone"]),
+                "Row": int(row["Row"]),
+                "Col": int(row["Col"]),
+                "Hotspot": int(row.get("Hotspot", 0)),
+                "Pred_Proba": float(row.get("Pred_Proba", 0.0)),
+                "Predicted": int(row.get("Predicted", 0))
+            }
+            racks_data.append(rack_data)
+        return {"before": racks_data, "after": racks_data}
+    
+    # Create placeholder for visualization that will update
+    viz_placeholder = st.empty()
+    
+    # Generate initial JSON data
+    json_data = df_to_json_format(df_pred)
+    
+    # Save to file for standalone visualization
+    with open('datacenter_data.json', 'w') as f:
+        json.dump(json_data, f, indent=2)
+    
+    # Read the HTML file and inject data
+    def create_visualization_html(json_data):
+        """Read visual.html and inject JSON data"""
+        html_path = "visual.html"
+        try:
+            with open(html_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            # Inject JSON data directly into the HTML
+            json_str = json.dumps(json_data, indent=2)
+            
+            # Add script to inject data before the module script
+            data_injection = f"""
+            <script>
+            // Injected data from Streamlit
+            window.DATACENTER_DATA = {json_str};
+            </script>
+            """
+            
+            # Insert before the module script tag
+            html_content = html_content.replace(
+                "    <script type=\"module\">",
+                data_injection + "    <script type=\"module\">"
+            )
+            
+            # Modify loadData function to check for injected data first
+            html_content = html_content.replace(
+                "        async function loadData() {\n            try {",
+                """        async function loadData() {
+            // Check for injected data from Streamlit first
+            if (window.DATACENTER_DATA) {
+                datacenterData = window.DATACENTER_DATA.after || window.DATACENTER_DATA.before;
+                console.log('Loaded rack data from Streamlit:', datacenterData.length, 'racks');
+                initVisualizations();
+                return;
+            }
+            try {"""
+            )
+            return html_content
+        except:
+            return f"""
+            <div style="padding: 20px; color: white; background: #333; border-radius: 8px;">
+                <h3>⚠️ Visualization File Not Found</h3>
+                <p>Please ensure visual.html exists in the project directory.</p>
+            </div>
+            """
+    
+    # Display initial visualization
+    viz_html = create_visualization_html(json_data)
+    
+    import streamlit.components.v1 as components
+    with viz_placeholder.container():
+        components.html(viz_html, height=800, scrolling=False)
+    
+    # AI Optimization Controls (placed right under the visualization)
+    st.markdown("### AI-Powered Workload Optimization")
+    
+    col_opt1, col_opt2 = st.columns([3, 1])
+    
+    with col_opt1:
+        st.markdown("""
+        **Intelligent workload redistribution** using constraint-based optimization.
+        The AI will move CPU load from overheated racks to cooler ones while respecting capacity limits.
+        """)
+    
+    with col_opt2:
+        optimize_button = st.button("Run AI Optimization", type="primary", use_container_width=True)
+    
+    # Optimization execution with real-time updates
+    if optimize_button:
+        # Create layout for optimization process
+        st.markdown("---")
+        st.subheader("Optimization Process")
+        
+        # Show BEFORE state
+        st.markdown("#### Before Optimization")
+        col_before1, col_before2 = st.columns(2)
+        with col_before1:
+            st.metric("Hotspots", hotspot_count)
+            st.metric("Peak Temperature", f"{max_temp:.1f}°C")
+        with col_before2:
+            st.metric("Avg CPU Load", f"{df_pred['CPU_load'].mean():.1f}%")
+            st.metric("Total Power", f"{df_pred['Power_consumption'].sum():.1f} kW")
+        
+        # DURING: Animation container
+        st.markdown("---")
+        st.markdown("#### During Optimization - Live Animation")
+        
+        col_viz, col_status = st.columns([2, 1])
+        
+        # Create persistent placeholders
+        with col_viz:
+            animation_viz = st.empty()
+        
+        with col_status:
+            st.markdown("**Optimization Status**")
+            step1_status = st.empty()
+            step2_status = st.empty()
+            step3_status = st.empty()
+            step4_status = st.empty()
+            st.markdown("---")
+            progress_bar = st.empty()
+            migration_status = st.empty()
+            st.markdown("---")
+            metrics_status = st.empty()
+        
+        # Step 1: AI Analysis
+        step1_status.info("**Step 1:** Analyzing thermal patterns...")
+        time.sleep(0.5)
+        step1_status.success(f"**Step 1:** Detected {hotspot_count} hotspots across {len(df_pred)} racks")
+        
+        # Step 2: ML Prediction
+        step2_status.info("**Step 2:** Running hotspot prediction model...")
+        time.sleep(0.5)
+        step2_status.success(f"**Step 2:** Model accuracy: {acc:.1%} | Peak temp: {max_temp:.1f}°C")
+        
+        # Step 3: Compute Optimization Plan
+        step3_status.info("**Step 3:** Computing optimal workload distribution...")
+        with st.spinner("Computing optimization plan..."):
+            df_opt, transfers, metrics = optimize_workload_lp(df_pred, max_migration_cost)
+        
+        if metrics["status"] == "Success" and len(transfers) > 0:
+            step3_status.success(f"**Step 3:** Plan ready: {len(transfers)} migrations | Cost: {metrics['total_cost']:.1f}")
+            
+            # Step 4: Execute with smooth animation
+            step4_status.info(f"**Step 4:** Executing {len(transfers)} migrations...")
+            
+            # Simulate step-by-step migration with smooth updates
+            df_current = df_pred.copy()
+            
+            for idx, transfer in enumerate(transfers):
+                # Update progress
+                progress = (idx + 1) / len(transfers)
+                progress_bar.progress(progress, text=f"Migration {idx+1}/{len(transfers)}")
+                migration_status.markdown(f"**Current:** {transfer['From']} → {transfer['To']} ({transfer['CPU_Moved']:.1f}% CPU)")
+                
+                # Apply this transfer to current state
+                from_idx = df_current[df_current['Rack_ID'] == transfer['From']].index[0]
+                to_idx = df_current[df_current['Rack_ID'] == transfer['To']].index[0]
+                
+                df_current.loc[from_idx, 'CPU_load'] -= transfer['CPU_Moved']
+                df_current.loc[to_idx, 'CPU_load'] += transfer['CPU_Moved']
+                
+                # Recalculate temperatures for visualization
+                df_current.loc[from_idx, 'Temperature'] = max(
+                    TEMP_AMBIENT,
+                    df_current.loc[from_idx, 'Temperature'] - (TEMP_CPU_COEFF * transfer['CPU_Moved'])
+                )
+                df_current.loc[to_idx, 'Temperature'] = min(
+                    95.0,
+                    df_current.loc[to_idx, 'Temperature'] + (TEMP_CPU_COEFF * transfer['CPU_Moved'] * 0.7)
+                )
+                
+                # Recalculate hotspot labels based on new values
+                df_current["Hotspot"] = ((df_current["CPU_load"] > HOT_CPU_THRESHOLD) & 
+                                        (df_current["Temperature"] > HOT_TEMP_THRESHOLD)).astype(int)
+                
+                # Update predictions
+                df_current = predict_all(df_current, model, features)
+                
+                # Update the SAME visualization with new data
+                json_data_step = df_to_json_format(df_current)
+                with open('datacenter_data.json', 'w') as f:
+                    json.dump(json_data_step, f, indent=2)
+                
+                viz_html_step = create_visualization_html(json_data_step)
+                with animation_viz:
+                    components.html(viz_html_step, height=800, scrolling=False)
+                
+                # Show current metrics in status panel
+                current_hotspots = int(df_current['Predicted'].sum())
+                current_max_temp = df_current['Temperature'].max()
+                
+                with metrics_status:
+                    st.metric("Hotspots", current_hotspots, delta=current_hotspots - hotspot_count)
+                    st.metric("Peak Temp", f"{current_max_temp:.1f}°C", delta=f"{current_max_temp - max_temp:.1f}°C")
+                
+                # Delay for animation effect
+                time.sleep(animation_speed)
+            
+            # Final update
+            step4_status.success(f"**Step 4:** Complete! {len(transfers)} migrations executed")
+            progress_bar.progress(1.0, text="Complete")
+            migration_status.markdown("✅ **All migrations complete**")
+            
+            # Show AFTER state with final visualization
+            st.markdown("---")
+            st.markdown("#### After Optimization - Final Result")
+            
+            col_after1, col_after2, col_after3, col_after4 = st.columns(4)
+            col_after1.metric("Hotspots", 
+                       f"{metrics['hotspots_after']}",
+                       delta=f"{metrics['hotspots_after'] - metrics['hotspots_before']}")
+            col_after2.metric("Peak Temperature", 
+                       f"{metrics['max_temp_after']:.1f}°C",
+                       delta=f"{metrics['max_temp_after'] - metrics['max_temp_before']:.1f}°C")
+            col_after3.metric("Total Power", 
+                       f"{metrics['total_power_after']:.1f} kW",
+                       delta=f"{metrics['total_power_after'] - metrics['total_power_before']:.1f} kW")
+            col_after4.metric("Migration Cost", f"{metrics['total_cost']:.1f} units")
+            
+            st.success(f"✅ Successfully eliminated {metrics['hotspots_before'] - metrics['hotspots_after']} hotspots! Temperature reduced by {metrics['max_temp_before'] - metrics['max_temp_after']:.1f}°C")
+            
+            # Detailed migration plan
+            with st.expander("View Detailed Migration Plan"):
+                transfers_df = pd.DataFrame(transfers)
+                st.dataframe(transfers_df, use_container_width=True)
+                
+                avg_distance = np.mean([t["Distance"] for t in transfers])
+                total_cpu_moved = sum([t["CPU_Moved"] for t in transfers])
+                
+                st.info(f"""
+                **Migration Summary:**
+                - Total CPU % moved: {total_cpu_moved:.1f}%
+                - Average rack distance: {avg_distance:.1f}
+                - Cost efficiency: {total_cpu_moved / metrics['total_cost']:.2f} CPU%/cost unit
+                - Temperature reduction: {metrics['max_temp_before'] - metrics['max_temp_after']:.1f}°C
+                """)
+        
+        elif metrics["status"] == "No optimization needed":
+            step3_status.info("**Step 3:** No hotspots detected")
+            step4_status.info("**Step 4:** System already optimized")
+            st.info("✅ No hotspots detected - system is already optimized!")
+        else:
+            step3_status.warning("**Step 3:** No feasible solution found")
+            step4_status.warning("**Step 4:** Try adjusting parameters")
+            st.warning("⚠️ No feasible transfers found. Try increasing migration budget or relaxing constraints.")
+    
+    st.markdown("---")
+    
+    # =============================================================================
+    # AI Model Performance
+    # =============================================================================
+    
+    st.header("AI Model Performance")
     
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Accuracy", f"{acc:.2%}")
@@ -607,108 +945,32 @@ def main():
             st.plotly_chart(shap_fig, use_container_width=True)
     
     # =============================================================================
-    # SECTION 2: Current State Visualization
+    # Current Datacenter State Analysis
     # =============================================================================
     
-    st.header("🌡️ Current Data Center State")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Predicted Hotspots", int(df_pred["Predicted"].sum()))
-    col2.metric("Max Temperature", f"{df_pred['Temperature'].max():.1f}°C")
-    col3.metric("Avg CPU Load", f"{df_pred['CPU_load'].mean():.1f}%")
-    col4.metric("Total Power", f"{df_pred['Power_consumption'].sum():.2f} kW")
+    st.header("Current State Analysis")
     
     # Heatmap
     temp_fig = plot_temperature_heatmap(df_pred, "Temperature", "Current Rack Temperatures")
     st.plotly_chart(temp_fig, use_container_width=True)
     
     # Risky racks table
-    st.subheader("⚠️ Top Risk Racks")
+    st.subheader("High-Risk Racks")
     risky_racks = df_pred.sort_values("Pred_Proba", ascending=False).head(8)[
         ["Rack_ID", "CPU_load", "Temperature", "Thermal_Zone", "Pred_Proba", "Predicted"]
     ]
     st.dataframe(risky_racks.reset_index(drop=True), use_container_width=True)
-    
     # =============================================================================
-    # SECTION 3: AI-Powered Optimization
-    # =============================================================================
-    
-    st.header("🎯 AI-Powered Workload Optimization")
-    
-    st.info(f"""
-    **Optimization Strategy:**
-    - Uses constraint-based optimization (capacity, cost, thermal zones)
-    - Considers rack adjacency and migration costs
-    - Budget limit: {max_migration_cost} cost units
-    - Cost per % CPU moved: {MIGRATION_COST_PER_PCT} × distance_penalty
-    """)
-    
-    if st.button("🚀 Run AI Optimization", type="primary"):
-        with st.spinner("⚡ Optimizing workload distribution..."):
-            df_opt, transfers, metrics = optimize_workload_lp(df_pred, max_migration_cost)
-        
-        if metrics["status"] == "Success" and len(transfers) > 0:
-            st.success(f"✅ Optimization complete! {metrics['transfers']} transfers planned.")
-            
-            # Metrics comparison
-            st.subheader("📈 Optimization Results")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Hotspots Eliminated", 
-                       f"{metrics['hotspots_after']}",
-                       delta=f"{metrics['hotspots_after'] - metrics['hotspots_before']}")
-            col2.metric("Max Temperature", 
-                       f"{metrics['max_temp_after']:.1f}°C",
-                       delta=f"{metrics['max_temp_after'] - metrics['max_temp_before']:.1f}°C")
-            col3.metric("Total Power", 
-                       f"{metrics['total_power_after']:.1f} kW",
-                       delta=f"{metrics['total_power_after'] - metrics['total_power_before']:.1f} kW")
-            col4.metric("Migration Cost", f"{metrics['total_cost']:.1f}", 
-                       delta=f"of {max_migration_cost}")
-            
-            # Comparison chart
-            metrics_fig = plot_metrics_comparison(metrics)
-            st.plotly_chart(metrics_fig, use_container_width=True)
-            
-            # Optimized heatmap
-            st.subheader("🌡️ Optimized Temperature Distribution")
-            opt_temp_fig = plot_temperature_heatmap(df_opt, "Optimized_Temp", 
-                                                   "After Optimization")
-            st.plotly_chart(opt_temp_fig, use_container_width=True)
-            
-            # Transfer plan
-            st.subheader("📋 Migration Plan")
-            transfers_df = pd.DataFrame(transfers)
-            st.dataframe(transfers_df, use_container_width=True)
-            
-            # Summary statistics
-            avg_distance = np.mean([t["Distance"] for t in transfers])
-            total_cpu_moved = sum([t["CPU_Moved"] for t in transfers])
-            
-            st.info(f"""
-            **Migration Summary:**
-            - Total CPU % moved: {total_cpu_moved:.1f}%
-            - Average rack distance: {avg_distance:.1f}
-            - Cost efficiency: {total_cpu_moved / metrics['total_cost']:.2f} CPU%/cost unit
-            - Temperature reduction: {metrics['max_temp_before'] - metrics['max_temp_after']:.1f}°C
-            """)
-            
-        elif metrics["status"] == "No optimization needed":
-            st.info("✅ No hotspots detected - system is already optimized!")
-        else:
-            st.warning("⚠️ No feasible transfers found. Try increasing migration budget or relaxing constraints.")
-    
-    # =============================================================================
-    # SECTION 4: Data Explorer
+    # Data Explorer
     # =============================================================================
     
-    with st.expander("🔍 Full Dataset Explorer"):
+    with st.expander("Full Dataset Explorer"):
         st.dataframe(df_pred, use_container_width=True)
         
         # Download option
         csv = df_pred.to_csv(index=False)
         st.download_button(
-            label="📥 Download Data as CSV",
+            label="Download Data as CSV",
             data=csv,
             file_name="datacenter_simulation.csv",
             mime="text/csv"
@@ -718,26 +980,8 @@ def main():
     # Footer
     # =============================================================================
     
+    # Footer
     st.markdown("---")
-    st.markdown("""
-    ### 🔧 Implementation Notes
-    
-    **Enhancements over basic version:**
-    1. **Better ML Model**: HistGradientBoostingClassifier outperforms RandomForest
-    2. **Explainability**: SHAP values show which features drive predictions
-    3. **Realistic Physics**: Thermal coupling, zones, and adjacency effects
-    4. **Smart Optimization**: Constraint-based approach vs simple heuristics
-    5. **Cost Modeling**: Tracks migration costs and respects budgets
-    
-    **Extensibility ideas:**
-    - Replace optimizer with full LP/ILP solver (PULP, OR-Tools)
-    - Add time-series simulation with LSTM for predictive load forecasting
-    - Implement real-time dashboard with live data feeds
-    - Add multi-objective optimization (minimize cost + temp + power)
-    - Include network topology and bandwidth constraints
-    
-    **Built for hackathons** - single file, well-documented, ready to demo! 🚀
-    """)
 
 if __name__ == "__main__":
     main()
