@@ -244,4 +244,3 @@ Built for hackathons - feel free to fork, extend, and improve!
 **Built with ❤️ for DataCool Hackathon 2025**
 
 *Ready to optimize your data center? Run `streamlit run datacenter_ai_enhanced.py` and let AI do the work!* 🚀
-
