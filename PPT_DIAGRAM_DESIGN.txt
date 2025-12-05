@@ -21,9 +21,9 @@
     ┃  Histogram Gradient  ┃
     ┃  Boosting (94% Acc)  ┃
     ┃                      ┃
-    ┃  f(x) = Σ αₜhₜ(x)   ┃
+    ┃  f(x) = Σ αₜhₜ(x)     ┃
     ┃                      ┃
-    ┃  P = 1/(1+e⁻ᶠ⁽ˣ⁾)   ┃
+    ┃  P = 1/(1+e⁻ᶠ⁽ˣ⁾)    ┃
     ┃                      ┃
     ┃  → Hotspot if P>0.5  ┃
     ┗━━━━━━━━━┳━━━━━━━━━━━━┛
@@ -74,28 +74,4 @@
                            KEY METRICS
 ═══════════════════════════════════════════════════════════════════
 
-    Accuracy: 94%  |  Hotspots: 4 → 1  |  Temp: -7.1°C
-
-
-═══════════════════════════════════════════════════════════════════
-
-POWERPOINT INSTRUCTIONS:
-========================
-
-1. Create 5 rounded rectangles vertically aligned
-2. Use gradient fills: 
-   - Block 1: Blue (#4A90E2)
-   - Block 2: Purple (#7B68EE)
-   - Block 3: Green (#50C878)
-   - Block 4: Orange (#FF9500)
-   - Block 5: Red (#FF6B6B)
-3. Add white text (bold headers, regular equations)
-4. Connect blocks with arrows (2pt white lines)
-5. Add shadow effects for depth
-6. Bottom: Add metrics bar with icons
-
-COLOR SCHEME:
-Data Input → ML → Explainability → Optimization → Results
-  🔵         🟣         🟢              🟠            🔴
-
-
+    Accuracy: 94%  |  Hotspots: 4 → 1  |  Temp: -9.1°C

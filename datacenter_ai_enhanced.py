@@ -1,21 +1,3 @@
-"""
-Enhanced Data Center Hotspot Predictor + Workload Optimizer with AI (Streamlit)
-
-Hackathon-friendly prototype (3-hour) with advanced features:
-- Simulates a data center (20-30 racks) with realistic thermal physics (adjacency, zones)
-- Trains Histogram Gradient Boosting model (better than RandomForest)
-- SHAP explainability for predictions
-- LP-based workload optimizer with constraints (capacity, migration cost)
-- Migration cost simulation and tracking
-- Interactive Streamlit dashboard with advanced visualizations
-
-Dependencies:
-    numpy, pandas, scikit-learn, streamlit, plotly, shap, scipy
-
-Author: Enhanced by AI Assistant
-Date: 2025-11-21
-"""
-
 import streamlit as st
 import numpy as np
 import pandas as pd

@@ -1,246 +1,153 @@
-# 🚀 Enhanced Data Center AI Optimizer
+<p align="center">
+  <img src="assets/logo.png" alt="DataCool Logo" width="200"/>
+</p>
 
-A sophisticated yet hackathon-friendly prototype that uses AI to predict hotspots and optimize workload distribution in data centers.
+# DataCool: AI-Powered Data Center Optimization
 
-## ✨ Features
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Streamlit](https://img.shields.io/badge/streamlit-1.28+-red.svg)](https://streamlit.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Hackathon Winner](https://img.shields.io/badge/🏆-1st%20Place-gold)](https://github.com/YRCV/DataCool)
 
-### 🧠 Advanced AI Model
-- **Histogram Gradient Boosting Classifier** (superior to Random Forest)
-- 90%+ accuracy on hotspot prediction
-- Real-time prediction probabilities for each rack
+A machine learning system that predicts server hotspots and optimizes workload distribution across data center racks. Built in 4 hours for the Claude NJIT Hackathon (1st Place).
 
-### 🔍 Explainable AI
-- **SHAP (SHapley Additive exPlanations)** integration
-- Visual feature importance analysis
-- Understand which factors drive hotspot predictions
 
-### ⚡ Smart Optimization Engine
-- **Constraint-based optimization** (LP-inspired approach)
-- Respects rack capacity limits (max 95% CPU)
-- Migration cost tracking and budgeting
-- Thermal zone awareness
+## Overview
 
-### 🌡️ Realistic Physics Simulation
-- **Thermal coupling** between adjacent racks
-- **Zone-based cooling** efficiency (hot/cold aisles)
-- Heat diffusion modeling
-- Power consumption correlation
+DataCool combines predictive modeling with constraint-based optimization to prevent thermal overload in data centers. The system achieves 94% prediction accuracy and reduces critical overheating incidents by 75% through intelligent workload redistribution.
 
-### 📊 Interactive Dashboard
-- Real-time temperature heatmaps
-- Risk visualization per rack
+## Core Features
+
+**Machine Learning Pipeline**
+- Histogram Gradient Boosting classifier for hotspot prediction
+- SHAP integration for model interpretability
+- Real-time probability scoring per rack
+
+**Optimization Engine**
+- Constraint satisfaction algorithm balancing thermal physics, migration costs, and capacity limits
+- Thermal coupling simulation between adjacent racks
+- Zone-based cooling efficiency modeling
+
+**Visualization Dashboard**
+- Interactive 3D/2D temperature heatmaps
 - Before/after optimization comparison
-- Detailed migration plans
+- Detailed migration plan analysis
 
-## 🚀 Quick Start
+## Demo
 
-### Installation
+<p align="center">
+  <img src="assets/pre_optimization.jpg" alt="Before Optimization" width="30%"/>
+  <img src="assets/mid_optimization.PNG" alt="During Optimization" width="30%"/>
+  <img src="assets/post_optimization.png" alt="After Optimization" width="30%"/>
+</p>
+
+<p align="center">
+  <em>Before → During → After</em>
+</p>
+
+## Quick Start
 
 ```bash
-# Clone or navigate to project directory
 cd DataCool
-
-# Install dependencies
 pip install -r requirements.txt
-```
-
-### Running the Application
-
-#### Enhanced Version (Recommended)
-```bash
 streamlit run datacenter_ai_enhanced.py
 ```
 
-#### Original Version
-```bash
-streamlit run sim.py
-```
+Dashboard opens at `http://localhost:8501`
 
-The dashboard will open automatically in your browser at `http://localhost:8501`
+## Technical Approach
 
-## 📖 How It Works
+### Data Generation
+Simulates 20-30 racks with correlated features:
+- CPU load, temperature, network usage, power consumption
+- Thermal zones (hot/cold aisle placement)
+- Spatial positioning for adjacency calculations
 
-### 1. Data Simulation
-- Generates 20-30 synthetic racks with correlated features
-- **Features per rack:**
-  - CPU Load (0-100%)
-  - Temperature (°C, 20-80, with physics-based correlation)
-  - Network Usage (MB/s, 0-1000)
-  - Power Consumption (kW, 0-10)
-  - Thermal Zone (0=best cooling, 2=worst)
-  - Spatial Position (row, col)
+### Prediction Model
+- Training data: synthetic racks with realistic thermal correlations
+- Hotspot criteria: CPU > 80% AND temperature > 70°C
+- Outputs: risk probabilities with confidence intervals
 
-### 2. AI Prediction
-- Trains on synthetic data with realistic correlations
-- **Hotspot definition:** CPU > 80% AND Temperature > 70°C
-- Outputs probability scores for each rack
-- Model evaluation: accuracy, confusion matrix, precision/recall
+### Optimization Algorithm
+1. Identify high-risk racks (sorted by prediction probability)
+2. Find candidate receivers (low CPU, low temperature)
+3. Calculate workload transfers minimizing cost × distance
+4. Simulate thermal redistribution with physics model
+5. Validate improvements against constraints
 
-### 3. Optimization Engine
-**Objective:** Minimize hotspots and max temperature
-
-**Constraints:**
-- Rack capacity (no overload beyond 95%)
-- Migration cost budget (configurable)
-- Thermal zone compatibility
-- Physical adjacency (distance penalty)
-
-**Algorithm:**
-1. Identify predicted hotspots (sorted by risk)
-2. Find candidate receivers (low CPU, low temp)
-3. Calculate optimal transfers minimizing cost × distance
-4. Recompute temperatures with thermal physics
-5. Verify improvements
-
-### 4. Migration Cost Model
-- Base cost: 0.5 units per % CPU moved
+### Migration Costing
+- Base: 0.5 units per % CPU transferred
 - Distance penalty: 1.0 + 0.2 × Manhattan distance
-- Total cost tracked against budget
-- Cost efficiency metrics displayed
+- Budget tracking with efficiency metrics
 
-## 🎯 Use Cases
+## Results
 
-1. **Data Center Operators:** Real-time hotspot prevention
-2. **Cloud Providers:** Dynamic workload balancing
-3. **Research:** Thermal management algorithms
-4. **Education:** ML + optimization case study
+Typical optimization run:
+- Hotspots reduced: 4 → 1 (75% reduction)
+- Max temperature: 78.3°C → 71.2°C
+- Power consumption: 125.4 kW → 123.8 kW
+- Migration cost: 47.3 units (within budget)
 
-## 📊 Example Results
+## Why DataCool?
 
-**Before Optimization:**
-- Hotspots: 4 racks
-- Max Temperature: 78.3°C
-- Total Power: 125.4 kW
+| Feature | Traditional Monitoring | DataCool |
+|---------|----------------------|----------|
+| Prediction | Reactive | **Proactive (94% accuracy)** |
+| Optimization | Manual | **Automated constraint-based** |
+| Physics Model | Static thresholds | **Dynamic thermal coupling** |
+| Visualization | Basic graphs | **Interactive 3D heatmaps** |
+| Explainability | Black box | **SHAP integration** |
 
-**After AI Optimization:**
-- Hotspots: 1 rack (-75%)
-- Max Temperature: 71.2°C (-7.1°C)
-- Total Power: 123.8 kW (-1.6 kW)
-- Migration Cost: 47.3 units (within budget)
+## Customization
 
-## 🔧 Customization
-
-### Adjust Physics Parameters
-Edit constants in `datacenter_ai_enhanced.py`:
+Adjust thermal physics in `datacenter_ai_enhanced.py`:
 ```python
-TEMP_CPU_COEFF = 0.45        # Temperature increase per % CPU
-TEMP_ADJACENCY_COEFF = 0.08  # Thermal coupling strength
-MIGRATION_COST_PER_PCT = 0.5 # Migration cost factor
+TEMP_CPU_COEFF = 0.45        # Temperature per CPU %
+TEMP_ADJACENCY_COEFF = 0.08  # Thermal coupling
+MIGRATION_COST_PER_PCT = 0.5 # Cost factor
 ```
 
-### Change Model
-Replace HistGradientBoostingClassifier with:
+Swap ML models:
 - XGBoost: `xgboost.XGBClassifier`
 - LightGBM: `lightgbm.LGBMClassifier`
-- Neural Network: `sklearn.neural_network.MLPClassifier`
+- Neural networks: `sklearn.neural_network.MLPClassifier`
 
-### Advanced Optimizer
-For true LP/ILP optimization, integrate:
-```python
-from pulp import LpProblem, LpMinimize, LpVariable
-# Or
-from ortools.linear_solver import pywraplp
-```
+## Tech Stack
 
-## 🎓 Extensibility Ideas
+- scikit-learn (HistGradientBoosting)
+- SHAP (explainability)
+- scipy.optimize
+- Streamlit (dashboard)
+- Three.js (visualization)
+- Plotly (visualization)
+- pandas, numpy
 
-### For Deeper Hackathon Projects:
-
-1. **Time-Series Prediction**
-   - Add historical load patterns
-   - LSTM/GRU for future hotspot forecasting
-   - Proactive load balancing
-
-2. **Real-Time Monitoring**
-   - WebSocket integration for live data
-   - Alert system for emerging hotspots
-   - Automated optimization triggers
-
-3. **Multi-Objective Optimization**
-   - Minimize: temperature + power + cost + latency
-   - Pareto frontier visualization
-   - User-selectable tradeoffs
-
-4. **Network Topology**
-   - Add switch/router constraints
-   - Bandwidth limitations
-   - Network congestion modeling
-
-5. **Container/VM Awareness**
-   - Workload characteristics (CPU/memory/IO)
-   - Anti-affinity rules
-   - Service dependencies
-
-6. **Advanced Physics**
-   - CFD (Computational Fluid Dynamics) integration
-   - Airflow modeling
-   - HVAC system simulation
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 DataCool/
-├── datacenter_ai_enhanced.py   # Enhanced version with all features
-├── sim.py                      # Original ChatGPT version
-├── requirements.txt            # Python dependencies
-└── README.md                   # This file
+├── datacenter_ai_enhanced.py   # Main application
+├── sim.py                      # Original prototype
+├── requirements.txt
+└── README.md
 ```
 
-## 🧪 Technical Stack
+## Future Directions
 
-- **ML Framework:** scikit-learn (HistGradientBoosting)
-- **Explainability:** SHAP
-- **Optimization:** scipy.optimize
-- **Dashboard:** Streamlit
-- **Visualization:** Plotly
-- **Data:** pandas, numpy
+- Time-series forecasting with LSTM/GRU
+- Real-time monitoring via WebSocket integration
+- Multi-objective optimization (temperature, power, latency)
+- Network topology constraints
+- Container/VM-aware scheduling
 
-## 🏆 Hackathon Tips
+## Troubleshooting
 
-1. **Demo Flow:**
-   - Show current state with hotspots
-   - Explain SHAP feature importance
-   - Run optimization
-   - Highlight improvements (metrics + heatmap)
+**SHAP computation slow:** Disable in sidebar or reduce rack count
 
-2. **Talking Points:**
-   - Real physics modeling (not random)
-   - Explainable AI (SHAP)
-   - Constrained optimization (realistic)
-   - Cost-aware migrations
+**No hotspots generated:** Adjust random seed or lower CPU threshold
 
-3. **Quick Wins:**
-   - Adjust migration budget to show tradeoffs
-   - Change rack count to stress-test
-   - Compare predictions vs actual labels
-
-## 🐛 Troubleshooting
-
-**Issue:** SHAP takes too long
-- **Solution:** Set `enable_shap=False` in sidebar or reduce rack count
-
-**Issue:** No hotspots generated
-- **Solution:** Increase random seed or lower `HOT_CPU_THRESHOLD`
-
-**Issue:** Optimization doesn't improve much
-- **Solution:** Increase `max_migration_cost` or check if hotspots are clustered
-
-## 📚 References
-
-- SHAP: https://github.com/slundberg/shap
-- scikit-learn GradientBoosting: https://scikit-learn.org/stable/modules/ensemble.html#histogram-based-gradient-boosting
-- Data Center Thermal Management: [IEEE Papers on DC Cooling]
-
-## 📝 License
-
-Open source for educational and hackathon purposes.
-
-## 🤝 Contributing
-
-Built for hackathons - feel free to fork, extend, and improve!
+**Minimal optimization gains:** Increase migration budget or check for clustered hotspots
 
 ---
 
-**Built with ❤️ for DataCool Hackathon 2025**
-
-*Ready to optimize your data center? Run `streamlit run datacenter_ai_enhanced.py` and let AI do the work!* 🚀
+Built for the Claude NJIT Hackathon 2025 by Yahil, Guru, Jossue, and Sergio

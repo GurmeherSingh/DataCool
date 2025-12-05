@@ -1,25 +1,4 @@
 # datacenter_ai_sim.py
-"""
-Data Center Hotspot Predictor + Workload Optimizer (Streamlit)
-
-Single-file hackathon prototype (3-hour friendly) that:
-- Simulates a small data center (20-30 racks) with correlated features.
-- Trains an AI model (Random Forest) to predict "Hotspot" racks.
-- Produces prediction probabilities.
-- Implements a simple, explainable recommendation engine to redistribute workload.
-- Displays an interactive Streamlit dashboard with:
-    * Heatmap of rack temperatures (grid layout),
-    * Sliders to tweak CPU load per rack,
-    * Dynamic AI predictions,
-    * "Apply AI Recommendation" button that simulates the effect of workload redistribution
-      and shows projected improvements.
-
-Dependencies:
-    numpy, pandas, scikit-learn, streamlit, plotly
-
-Author: ChatGPT (hackathon-friendly)
-Date: 2025-11-21
-"""
 
 from typing import Tuple, List, Dict
 import streamlit as st
