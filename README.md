@@ -38,7 +38,7 @@ DataCool combines predictive modeling with constraint-based optimization to prev
 <p align="center">
   <img src="assets/pre_optimization.jpg" alt="Before Optimization" width="30%"/>
   <img src="assets/mid_optimization.PNG" alt="During Optimization" width="30%"/>
-  <img src="assets/post_optimization.png" alt="After Optimization" width="30%"/>
+  <img src="assets/post_optimization.PNG" alt="After Optimization" width="30%"/>
 </p>
 
 <p align="center">
@@ -118,8 +118,7 @@ Swap ML models:
 - SHAP (explainability)
 - scipy.optimize
 - Streamlit (dashboard)
-- Three.js (visualization)
-- Plotly (visualization)
+- Three.js, Plotly (visualization)
 - pandas, numpy
 
 ## Project Structure
